@@ -38,6 +38,18 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-push # Attend que l'image soit bien envoyée sur Docker Hub avant de lancer le déploiement
     steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Copie du docker-compose.yml sur le serveur
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "docker-compose.yml"
+          target: "/home/ubuntu/tnb-switch/"
+
       - name: Déploiement automatique sur le Serveur via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -47,15 +59,27 @@ jobs:
           script: |
             # Créer le dossier s'il n'existe pas encore sur le serveur
             mkdir -p /home/ubuntu/tnb-switch
-            
+
             # Se déplacer dans le dossier de déploiement
             cd /home/ubuntu/tnb-switch
-            
+
+            # Génère le .env à chaque déploiement à partir des secrets GitHub (jamais commité sur Git)
+            cat > .env <<EOF
+            DB_USER=${{ secrets.DB_USER }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            EOF
+            chmod 600 .env
+
             # Récupérer la dernière image mise à jour depuis Docker Hub
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/tnb-switch-backend:latest
-            
+
             # Relancer ton conteneur Docker Compose en appliquant les changements
             SPRING_PROFILES_ACTIVE=prod docker compose up -d --remove-orphans
-            
+
             # Nettoyer l'espace disque en supprimant les anciennes images obsolètes
             docker image prune -f
+
+      - name: Vérification du déploiement (healthcheck)
+        run: |
+          sleep 15
+          curl -f http://${{ secrets.SSH_HOST }}:8090/actuator/health || exit 1
