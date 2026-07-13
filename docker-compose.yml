@@ -1,6 +1,6 @@
 services:
   switch-backend:
-    image: ton-username-docker/tnb-switch-backend:latest
+    image: brice99/tnb-switch-backend:latest
     container_name: tnb-switch-backend
     network_mode: "host"
     restart: always
