@@ -102,6 +102,7 @@ public class DeviceWebSocketHandler extends TextWebSocketHandler {
 
         Device device = deviceInDb.get();
         UUID deviceId = device.getId();
+        logger.warn("Device [{}], Modèle [{}], connecté avec succès et synchronisé.", deviceId, deviceModel);
 
         // Le reste du workflow reste identique et propre :
         session.getAttributes().put("DEVICE_ID", deviceId);
@@ -119,7 +120,7 @@ public class DeviceWebSocketHandler extends TextWebSocketHandler {
 
         deviceQueueService.registerDevice(initialSession);
 
-        logger.info("Device [{}], Modèle [{}], connecté avec succès et synchronisé.", deviceId, deviceModel);
+        logger.warn("Device [{}], Modèle [{}], connecté avec succès et synchronisé.", deviceId, deviceModel);
     }
     /**
      * WORKFLOW : handleTextMessage (Routeur d'événements matériels asynchrones)
