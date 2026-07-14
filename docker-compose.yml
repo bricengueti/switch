@@ -1,0 +1,17 @@
+services:
+  switch-backend:
+    image: brice99/tnb-switch-backend:latest
+    container_name: tnb-switch-backend
+    network_mode: "host"
+    restart: always
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - DB_HOST=127.0.0.1
+      - DB_PORT=5432
+      - DB_NAME=tnb_switch_prod
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - ./logs:/app/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
