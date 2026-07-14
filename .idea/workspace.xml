@@ -4,10 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="e1212871-b67a-4c8d-a4a3-71b70f67d814" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/src/main/java/TNB/Switch/handler/DeviceWebSocketHandler.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/TNB/Switch/handler/DeviceWebSocketHandler.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application-prod.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-prod.properties" afterDir="false" />
-    </list>
+    <list default="true" id="e1212871-b67a-4c8d-a4a3-71b70f67d814" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />

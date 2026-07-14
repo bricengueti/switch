@@ -119,11 +119,21 @@ public class DeviceWebSocketHandler extends TextWebSocketHandler {
 
         deviceQueueService.registerDevice(initialSession);
 
-        // Communique au client son propre UUID métier : indispensable pour qu'il puisse
-        // ensuite l'inclure correctement dans ses futurs messages BALANCE_UPDATE
-        // (le serveur rejette sinon toute mise à jour comme tentative de falsification).
+        // Communique au client son propre UUID métier ET ses vrais soldes actuels (BDD) :
+        // indispensable pour que le Dashboard affiche les bonnes valeurs dès la connexion,
+        // sans dépendre d'un BALANCE_UPDATE initial que l'app ne peut pas envoyer avant
+        // de connaître son propre deviceId (voir handleTextMessage, action=BALANCE_UPDATE).
         String authConfirmation = String.format(
-                "{\"action\":\"AUTH_SUCCESS\",\"deviceId\":\"%s\"}", deviceId
+                "{\"action\":\"AUTH_SUCCESS\",\"deviceId\":\"%s\"," +
+                        "\"mtnMomoBalance\":%s,\"mtnAirtimeBalance\":%s," +
+                        "\"orangeOmBalance\":%s,\"orangeAirtimeBalance\":%s," +
+                        "\"camtelAirtimeBalance\":%s}",
+                deviceId,
+                device.getMtnMomoBalance(),
+                device.getMtnAirtimeBalance(),
+                device.getOrangeOmBalance(),
+                device.getOrangeAirtimeBalance(),
+                device.getCamtelAirtimeBalance()
         );
         session.sendMessage(new TextMessage(authConfirmation));
 
@@ -166,7 +176,7 @@ public class DeviceWebSocketHandler extends TextWebSocketHandler {
                         return;
                     }
                     deviceQueueService.registerDevice(updatedSession);
-                    logger.info("Mise à jour à chaud des portefeuilles pour le Device [{}]", deviceId);
+                    logger.warn("Mise à jour à chaud des portefeuilles pour le Device [{}]", deviceId);
                 }
 
                 default -> logger.warn("Action '{}' non supportée reçue du périphérique {}", action, deviceId);
