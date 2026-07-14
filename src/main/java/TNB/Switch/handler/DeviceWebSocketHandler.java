@@ -102,7 +102,6 @@ public class DeviceWebSocketHandler extends TextWebSocketHandler {
 
         Device device = deviceInDb.get();
         UUID deviceId = device.getId();
-        logger.warn("Device [{}], Modèle [{}], connecté avec succès et synchronisé.", deviceId, deviceModel);
 
         // Le reste du workflow reste identique et propre :
         session.getAttributes().put("DEVICE_ID", deviceId);
@@ -120,7 +119,15 @@ public class DeviceWebSocketHandler extends TextWebSocketHandler {
 
         deviceQueueService.registerDevice(initialSession);
 
-        logger.warn("Device [{}], Modèle [{}], connecté avec succès et synchronisé.", deviceId, deviceModel);
+        // Communique au client son propre UUID métier : indispensable pour qu'il puisse
+        // ensuite l'inclure correctement dans ses futurs messages BALANCE_UPDATE
+        // (le serveur rejette sinon toute mise à jour comme tentative de falsification).
+        String authConfirmation = String.format(
+                "{\"action\":\"AUTH_SUCCESS\",\"deviceId\":\"%s\"}", deviceId
+        );
+        session.sendMessage(new TextMessage(authConfirmation));
+
+        logger.info("Device [{}], Modèle [{}], connecté avec succès et synchronisé.", deviceId, deviceModel);
     }
     /**
      * WORKFLOW : handleTextMessage (Routeur d'événements matériels asynchrones)
