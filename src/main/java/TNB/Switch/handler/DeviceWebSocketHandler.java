@@ -127,7 +127,7 @@ public class DeviceWebSocketHandler extends TextWebSocketHandler {
         );
         session.sendMessage(new TextMessage(authConfirmation));
 
-        logger.info("Device [{}], Modèle [{}], connecté avec succès et synchronisé.", deviceId, deviceModel);
+        logger.warn("Device [{}], Modèle [{}], connecté avec succès et synchronisé.", deviceId, deviceModel);
     }
     /**
      * WORKFLOW : handleTextMessage (Routeur d'événements matériels asynchrones)
@@ -203,7 +203,7 @@ public class DeviceWebSocketHandler extends TextWebSocketHandler {
         if (session != null && session.isOpen()) {
             String jsonPayload = objectMapper.writeValueAsString(requestDto);
             session.sendMessage(new TextMessage(jsonPayload));
-            logger.info("Commande poussée vers le Device [{}].", deviceId);
+            logger.warn("Commande poussée vers le Device [{}].", deviceId);
         } else {
             logger.error("Impossible d'envoyer la commande : Le périphérique [{}] est hors ligne.", deviceId);
         }
