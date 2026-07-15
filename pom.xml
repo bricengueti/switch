@@ -67,5 +67,24 @@
 			</plugin>
 		</plugins>
 	</build>
+    <profiles>
+        <!-- Profil DEV (par défaut) -->
+        <profile>
+            <id>dev</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <properties>
+                <spring.profiles.active>dev</spring.profiles.active>
+            </properties>
+        </profile>
 
+        <!-- Profil PROD -->
+        <profile>
+            <id>prod</id>
+            <properties>
+                <spring.profiles.active>prod</spring.profiles.active>
+            </properties>
+        </profile>
+    </profiles>
 </project>
