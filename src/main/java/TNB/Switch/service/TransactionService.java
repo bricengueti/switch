@@ -94,7 +94,7 @@ public class TransactionService {
 
         var existing = transactionRepository.findByIdempotencyKey(idempotencyKey);
         if (existing.isPresent()) {
-            logger.info("[IDEMPOTENCE] Clé [{}] déjà connue. Renvoi de la transaction existante [{}].",
+            logger.warn("[IDEMPOTENCE] Clé [{}] déjà connue. Renvoi de la transaction existante [{}].",
                     idempotencyKey, existing.get().getId());
             return existing.get();
         }
@@ -102,7 +102,6 @@ public class TransactionService {
         Operator operatorSource = request.source_operator();
         Operator operatorDestination = request.destination_operator();
 
-        // Règle métier : Camtel n'a pas de portefeuille Mobile Money, uniquement de l'Airtime.
         if (operatorDestination == Operator.CAMTEL && request.serviceType() == ServiceType.MONEY_TRANSFER) {
             throw new InvalidOperatorException(
                     "Camtel ne supporte pas les transferts Mobile Money (MONEY_TRANSFER), uniquement l'Airtime.");
@@ -115,7 +114,7 @@ public class TransactionService {
         );
 
         Transaction savedTx = transactionRepository.save(transaction);
-        logger.info("[SWITCH] Nouvelle transaction enregistrée en BDD. ID: {} | Statut: COLLECT_PROCESSING", savedTx.getId());
+        logger.warn("[SWITCH] Nouvelle transaction enregistrée en BDD. ID: {} | Statut: COLLECT_PROCESSING", savedTx.getId());
         notifyClient(savedTx, "Transaction initiée, collecte en cours de routage.");
 
         UUID receivingDeviceId = null;
@@ -134,7 +133,7 @@ public class TransactionService {
             );
 
             deviceWebSocketHandler.sendCommand(receivingDeviceId, collectRequest);
-            logger.info("[ROUTAGE COLLECTE] Ordre [INITIATE_COLLECT] transmis avec succès au Device [{}] pour le client {} ({})",
+            logger.warn("[ROUTAGE COLLECTE] Ordre [INITIATE_COLLECT] transmis avec succès au Device [{}] pour le client {} ({})",
                     receivingDeviceId, savedTx.getSenderPhone(), operatorSource);
 
         } catch (Exception e) {
@@ -150,7 +149,6 @@ public class TransactionService {
 
         return savedTx;
     }
-
     /**
      * WORKFLOW : processIncomingDeviceSms
      * ---------------------------------------------------------------------------------
@@ -295,6 +293,8 @@ public class TransactionService {
                     targetOperator
             );
             deviceWebSocketHandler.sendCommand(availableDeviceId, transferRequest);
+            logger.warn("[ROUTAGE TRANSFERT] Ordre [EXECUTE_TRANSFER] transmis avec succès au Device [{}] pour le bénéficiaire {} ({})",
+                    availableDeviceId, transaction.getRecipientPhone(), targetOperator);
 
         } catch (Exception e) {
             logger.warn("Échec d'acheminement sur le périphérique [{}]. Tentative de bascule...", availableDeviceId, e);
@@ -322,7 +322,7 @@ public class TransactionService {
                         targetOperator
                 );
                 deviceWebSocketHandler.sendCommand(backupDeviceId, transferRequest);
-                logger.info("[ROUTAGE] Transaction [{}] déportée avec succès sur le périphérique de secours [{}]", transaction.getId(), backupDeviceId);
+                logger.warn("[ROUTAGE] Transaction [{}] déportée avec succès sur le périphérique de secours [{}]", transaction.getId(), backupDeviceId);
 
             } catch (Exception ex) {
                 logger.error("[ALERTE] Rupture de flotte ou de flot pour l'opérateur {}. Gel de la transaction [{}].", targetOperator, transaction.getId());
