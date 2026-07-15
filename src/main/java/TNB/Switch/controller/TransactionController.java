@@ -40,11 +40,7 @@ public class TransactionController {
             @Valid @RequestBody TransactionInitiationRequest request) {
 
         Transaction transaction = transactionService.createAndInitiateTransaction(
-                request.senderPhone(),
-                request.recipientPhone(),
-                request.amount(),
-                request.serviceType(),
-                request.idempotencyKey()
+                request
         );
 
         return new ResponseEntity<>(transaction, HttpStatus.CREATED);

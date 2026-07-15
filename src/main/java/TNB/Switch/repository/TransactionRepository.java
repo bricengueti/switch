@@ -30,7 +30,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
      */
     @Query(value = "SELECT * FROM transactions t " +
             "WHERE t.status = :#{#status.name()} " +
-            "AND t.operator = :operator " +
+            "AND t.operator_destination = :operator " +
             "ORDER BY t.sequence_number ASC " +
             "LIMIT 1 " +
             "FOR UPDATE SKIP LOCKED", nativeQuery = true)

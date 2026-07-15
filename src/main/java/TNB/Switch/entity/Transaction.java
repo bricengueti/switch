@@ -13,11 +13,6 @@ public class Transaction {
     @Column(length = 36)
     private UUID id;
 
-    // Colonne technique auto-incrémentée par PostgreSQL (BIGSERIAL) : sert de base au tri FIFO
-    // strict utilisé par TransactionRepository.findOldestAvailableJob. Ce n'est PAS la clé primaire
-    // (qui reste l'UUID métier ci-dessus) : @GeneratedValue ne peut légalement s'appliquer qu'à
-    // l'attribut @Id selon la spec JPA, donc on laisse la base générer la valeur et Hibernate la
-    // relit après INSERT.
     @org.hibernate.annotations.Generated(org.hibernate.annotations.GenerationTime.INSERT)
     @Column(name = "sequence_number", insertable = false, updatable = false, columnDefinition = "BIGSERIAL")
     private Long sequenceNumber;
@@ -31,9 +26,16 @@ public class Transaction {
     @Column(name = "recipient_phone", nullable = false, length = 20)
     private String recipientPhone;
 
+    // Remplace l'ancien champ unique "operator" : la collecte (côté expéditeur) et le dépôt
+    // (côté bénéficiaire) peuvent concerner deux opérateurs différents, donc deux colonnes
+    // explicites au lieu de faire deviner l'opérateur de destination au moment du transfert.
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private Operator operator; // Correction rigoureuse : Utilisation de l'enum Operator au lieu de String
+    @Column(name = "operator_source", nullable = false, length = 20)
+    private Operator operatorSource;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "operator_destination", nullable = false, length = 20)
+    private Operator operatorDestination;
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
@@ -49,13 +51,11 @@ public class Transaction {
     @Column(name = "assigned_device_id", length = 36)
     private UUID assignedDeviceId;
 
-    // --- CORRECTION OPTIMISATION : Stockage des IDs des logs au lieu du texte brut ---
     @Column(name = "collect_sms_log_id", length = 36)
     private UUID collectSmsLogId;
 
     @Column(name = "transfer_sms_log_id", length = 36)
     private UUID transferSmsLogId;
-    // ---------------------------------------------------------------------------------
 
     @Column(name = "error_code", length = 50)
     private String errorCode;
@@ -66,17 +66,18 @@ public class Transaction {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // Constructeurs
     public Transaction() {
     }
 
     public Transaction(String idempotencyKey, String senderPhone, String recipientPhone,
-                       Operator operator, BigDecimal amount, TransactionStatus status, ServiceType serviceType) {
+                       Operator operatorSource, Operator operatorDestination, BigDecimal amount,
+                       TransactionStatus status, ServiceType serviceType) {
         this.id = UUID.randomUUID();
         this.idempotencyKey = idempotencyKey;
         this.senderPhone = senderPhone;
         this.recipientPhone = recipientPhone;
-        this.operator = operator;
+        this.operatorSource = operatorSource;
+        this.operatorDestination = operatorDestination;
         this.amount = amount;
         this.status = status;
         this.serviceType = serviceType;
@@ -89,7 +90,6 @@ public class Transaction {
         this.updatedAt = LocalDateTime.now();
     }
 
-    // Getters et Setters Corrigés
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
 
@@ -104,8 +104,11 @@ public class Transaction {
     public String getRecipientPhone() { return recipientPhone; }
     public void setRecipientPhone(String recipientPhone) { this.recipientPhone = recipientPhone; }
 
-    public Operator getOperator() { return operator; }
-    public void setOperator(Operator operator) { this.operator = operator; }
+    public Operator getOperatorSource() { return operatorSource; }
+    public void setOperatorSource(Operator operatorSource) { this.operatorSource = operatorSource; }
+
+    public Operator getOperatorDestination() { return operatorDestination; }
+    public void setOperatorDestination(Operator operatorDestination) { this.operatorDestination = operatorDestination; }
 
     public BigDecimal getAmount() { return amount; }
     public void setAmount(BigDecimal amount) { this.amount = amount; }

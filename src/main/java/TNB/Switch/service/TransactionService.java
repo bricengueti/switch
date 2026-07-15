@@ -1,5 +1,6 @@
 package TNB.Switch.service;
 
+import TNB.Switch.dto.request.TransactionInitiationRequest;
 import TNB.Switch.entity.DeviceSmsLog;
 import TNB.Switch.entity.DeviceSmsLog.SmsProcessingStatus;
 import TNB.Switch.entity.Operator;
@@ -86,11 +87,9 @@ public class TransactionService {
      * └── 5. Expédie l'ordre 'INITIATE_COLLECT' (CollectRequest) au terminal Android via le canal WebSocket.
      */
     @Transactional
-    public Transaction createAndInitiateTransaction(String senderPhone, String recipientPhone, BigDecimal amount,
-                                                      ServiceType serviceType, String requestedIdempotencyKey) {
-        // 1. Idempotence : une relance avec la même clé renvoie la transaction déjà créée
-        String idempotencyKey = (requestedIdempotencyKey != null && !requestedIdempotencyKey.isBlank())
-                ? requestedIdempotencyKey
+    public Transaction createAndInitiateTransaction(TransactionInitiationRequest request) {
+        String idempotencyKey = (request.idempotencyKey() != null && !request.idempotencyKey().isBlank())
+                ? request.idempotencyKey()
                 : UUID.randomUUID().toString();
 
         var existing = transactionRepository.findByIdempotencyKey(idempotencyKey);
@@ -100,58 +99,52 @@ public class TransactionService {
             return existing.get();
         }
 
-        // 2. Identification chirurgicale de l'opérateur de l'expéditeur AVANT toute persistance
-        Operator clientOperator = Operator.fromPhoneNumber(senderPhone);
-        if (clientOperator == null) {
+        Operator operatorSource = request.source_operator();
+        Operator operatorDestination = request.destination_operator();
+
+        // Règle métier : Camtel n'a pas de portefeuille Mobile Money, uniquement de l'Airtime.
+        if (operatorDestination == Operator.CAMTEL && request.serviceType() == ServiceType.MONEY_TRANSFER) {
             throw new InvalidOperatorException(
-                    "Impossible de déterminer l'opérateur mobile pour le numéro expéditeur : " + senderPhone);
+                    "Camtel ne supporte pas les transferts Mobile Money (MONEY_TRANSFER), uniquement l'Airtime.");
         }
 
-        // 3. Initialisation de l'entité et persistance en Base de Données
         Transaction transaction = new Transaction(
-                idempotencyKey, senderPhone, recipientPhone, clientOperator, amount,
-                TransactionStatus.COLLECT_PROCESSING, serviceType
+                idempotencyKey, request.senderPhone(), request.recipientPhone(),
+                operatorSource, operatorDestination, request.amount(),
+                TransactionStatus.COLLECT_PROCESSING, request.serviceType()
         );
 
         Transaction savedTx = transactionRepository.save(transaction);
         logger.info("[SWITCH] Nouvelle transaction enregistrée en BDD. ID: {} | Statut: COLLECT_PROCESSING", savedTx.getId());
         notifyClient(savedTx, "Transaction initiée, collecte en cours de routage.");
 
-        // 4. Routage actif de l'ordre de collecte vers le pool de périphériques
         UUID receivingDeviceId = null;
         try {
-            // Extraction d'une session de périphérique éligible via le Load Balancer
-            // Note : On passe BigDecimal.ZERO car le solde actuel de la SIM importe peu pour un encaissement (Collecte)
             receivingDeviceId = deviceQueueService.acquireAvailableDevice(
-                    clientOperator,
-                    serviceType,
+                    operatorSource,
+                    request.serviceType(),
                     BigDecimal.ZERO
             );
 
-            // 5. Instanciation du Record avec l'action par défaut "INITIATE_COLLECT" et envoi WebSocket
             TNB.Switch.dto.request.CollectRequest collectRequest = new TNB.Switch.dto.request.CollectRequest(
                     savedTx.getId(),
                     savedTx.getSenderPhone(),
                     savedTx.getAmount(),
-                    clientOperator
+                    operatorSource
             );
 
             deviceWebSocketHandler.sendCommand(receivingDeviceId, collectRequest);
             logger.info("[ROUTAGE COLLECTE] Ordre [INITIATE_COLLECT] transmis avec succès au Device [{}] pour le client {} ({})",
-                    receivingDeviceId, savedTx.getSenderPhone(), clientOperator);
+                    receivingDeviceId, savedTx.getSenderPhone(), operatorSource);
 
         } catch (Exception e) {
             logger.error("[ALERTE COLLECTE] Rupture de flotte temporaire pour l'opérateur {} : Aucun périphérique disponible pour initier la collecte. Passage de la transaction [{}] en SUSPENDED.",
-                    clientOperator, savedTx.getId(), e);
+                    operatorSource, savedTx.getId(), e);
 
-            // CORRECTIF : si le device avait été réservé (acquireAvailableDevice a réussi)
-            // mais que l'envoi WebSocket a échoué ensuite, il faut le libérer, sinon il
-            // reste marqué "occupé" pour toujours, sans jamais recevoir de SMS à confirmer.
             if (receivingDeviceId != null) {
                 deviceQueueService.releaseDevice(receivingDeviceId);
             }
 
-            // Isolation de la transaction pour arbitrage ou relance manuelle via l'admin controller
             handleNoDeviceAvailableFallback(savedTx, "NO_DEVICE_AVAILABLE_FOR_COLLECT");
         }
 
@@ -281,11 +274,7 @@ public class TransactionService {
     private void triggerAutomaticTransfer(Transaction transaction) {
         transaction.setStatus(TransactionStatus.TRANSFER_PROCESSING);
 
-        Operator targetOperator = Operator.fromPhoneNumber(transaction.getRecipientPhone());
-        if (targetOperator == null) {
-            handleNoDeviceAvailableFallback(transaction, "INVALID_RECIPIENT_OPERATOR");
-            return;
-        }
+        Operator targetOperator = transaction.getOperatorDestination();
 
         UUID availableDeviceId = null;
         try {
@@ -302,7 +291,8 @@ public class TransactionService {
                     transaction.getId(),
                     transaction.getRecipientPhone(),
                     transaction.getAmount(),
-                    transaction.getServiceType()
+                    transaction.getServiceType(),
+                    targetOperator
             );
             deviceWebSocketHandler.sendCommand(availableDeviceId, transferRequest);
 
@@ -328,7 +318,8 @@ public class TransactionService {
                         transaction.getId(),
                         transaction.getRecipientPhone(),
                         transaction.getAmount(),
-                        transaction.getServiceType()
+                        transaction.getServiceType(),
+                        targetOperator
                 );
                 deviceWebSocketHandler.sendCommand(backupDeviceId, transferRequest);
                 logger.info("[ROUTAGE] Transaction [{}] déportée avec succès sur le périphérique de secours [{}]", transaction.getId(), backupDeviceId);
@@ -336,9 +327,6 @@ public class TransactionService {
             } catch (Exception ex) {
                 logger.error("[ALERTE] Rupture de flotte ou de flot pour l'opérateur {}. Gel de la transaction [{}].", targetOperator, transaction.getId());
 
-                // CORRECTIF : sans ça, un backupDeviceId réservé (acquireAvailableDevice a réussi)
-                // mais dont l'envoi WebSocket a échoué reste marqué "occupé" indéfiniment,
-                // puisqu'aucune SMS de confirmation ne viendra jamais le libérer.
                 if (backupDeviceId != null) {
                     deviceQueueService.releaseDevice(backupDeviceId);
                 }

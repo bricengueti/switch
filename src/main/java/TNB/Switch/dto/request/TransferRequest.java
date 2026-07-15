@@ -1,18 +1,22 @@
 package TNB.Switch.dto.request;
 
+import TNB.Switch.entity.Operator;
 import TNB.Switch.entity.ServiceType;
 
 import java.math.BigDecimal;
 import java.util.UUID;
 
 public record TransferRequest(
-        String action,         // Par défaut "EXECUTE_TRANSFER"
+        String action,
         UUID transactionId,
-        String recipientPhone,  // Le bénéficiaire du crédit/momo
+        String recipientPhone,
         BigDecimal amount,
-        ServiceType serviceType     // AIRTIME ou CASH_DEPOSIT
+        ServiceType serviceType,
+        Operator operator // NOUVEAU : opérateur de destination — évite à l'app Android
+        // de devoir deviner via le préfixe du numéro du bénéficiaire.
 ) {
-    public TransferRequest(UUID transactionId, String recipientPhone, BigDecimal amount, ServiceType serviceType) {
-        this("EXECUTE_TRANSFER", transactionId, recipientPhone, amount, serviceType);
+    public TransferRequest(UUID transactionId, String recipientPhone, BigDecimal amount,
+                           ServiceType serviceType, Operator operator) {
+        this("EXECUTE_TRANSFER", transactionId, recipientPhone, amount, serviceType, operator);
     }
 }
